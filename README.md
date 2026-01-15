@@ -188,8 +188,11 @@ Hier sind die User Stories für die Verabredungs-Synchronisierungs-App:
 - Datenstruktur: `{ [userName]: { [date]: [timeSlots] } }`
 - Separate Speicherung von Passwörtern: `meeting_pw_${code}`
 - Daten-Keys: `meeting_${code}`
+- die Daten müssen in einem Backend gespeichert werden damit die Software im Internet laufen kann
+- alle Servereitigen Dienste wie Webserver und Datenbank sollen via Docker Compose stack verfügbar gemacht werden
+- backendsprache PHP
 
-### **Tech Story 2: Datenformat**
+###  **Tech Story 2: Datenformat**
 - Datumsformat: YYYY-MM-DD (ISO 8601)
 - Zeitfenster: Array mit Werten ["morning", "afternoon", "evening"]
 - Namen als String-Keys im Gruppen-Objekt
