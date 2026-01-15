@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verabredung Synchronisieren</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📅 Verabredung Synchronisieren</h1>
+            <p class="subtitle">Finde den perfekten Tag und die perfekte Uhrzeit</p>
+        </header>
+
+        <div class="tabs">
+            <button class="tab active" data-tab="availability">Meine Verfügbarkeit</button>
+            <button class="tab" data-tab="matches">Gemeinsame Termine</button>
+            <button class="tab" data-tab="participants">Alle Teilnehmer</button>
+        </div>
+
+        <div id="availability-tab" class="tab-content active">
+            <div class="card">
+                <div class="info-box">
+                    <div class="info-box-title">🔒 So funktioniert's</div>
+                    <div class="info-box-text">Gib deinen Namen, Gruppen-Code und Passwort ein. Wähle dann für jeden Tag die Zeitfenster: Vormittag (VM), Nachmittag (NM) oder Abend (AB).</div>
+                </div>
+                <div class="input-section">
+                    <div class="input-group">
+                        <label for="name">Dein Name</label>
+                        <input type="text" id="name" placeholder="z.B. Max Mustermann">
+                    </div>
+                    <div class="input-group">
+                        <label for="code">Gruppen-Code</label>
+                        <input type="text" id="code" placeholder="z.B. team2024">
+                    </div>
+                    <div class="input-group">
+                        <label for="password">Gruppen-Passwort</label>
+                        <input type="password" id="password" placeholder="Passwort für diese Gruppe">
+                    </div>
+                </div>
+
+                <div class="calendar-section">
+                    <div class="calendar-header">
+                        <h3 class="section-title">Wähle deine verfügbaren Zeiten</h3>
+                        <div class="month-nav">
+                            <button class="nav-btn" id="prevMonth">←</button>
+                            <div class="month-display" id="monthDisplay"></div>
+                            <button class="nav-btn" id="nextMonth">→</button>
+                        </div>
+                    </div>
+
+                    <div class="calendar-grid" id="calendar"></div>
+
+                    <div class="legend">
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: #667eea;"></div>
+                            <span>Deine Auswahl</span>
+                        </div>
+                        <div class="legend-item">
+                            <span><strong>VM</strong> = Vormittag | <strong>NM</strong> = Nachmittag | <strong>AB</strong> = Abend</span>
+                        </div>
+                    </div>
+                </div>
+
+                <button class="submit-btn" id="saveAvailability">Verfügbarkeit speichern</button>
+                <div id="messageArea"></div>
+            </div>
+        </div>
+
+        <div id="matches-tab" class="tab-content">
+            <div class="card">
+                <h3 class="section-title">🎯 Gemeinsame freie Zeiten</h3>
+                <div class="info-box">
+                    <div class="info-box-title">Perfekte Matches</div>
+                    <div class="info-box-text">Hier siehst du alle Zeitfenster, in denen ALLE Teilnehmer Zeit haben</div>
+                </div>
+                <div id="matchesList"></div>
+            </div>
+
+            <div class="card">
+                <h3 class="section-title">⚠️ Teilweise verfügbar</h3>
+                <div class="info-box">
+                    <div class="info-box-title">Alternative Optionen</div>
+                    <div class="info-box-text">Diese Zeitfenster funktionieren für einige, aber nicht alle</div>
+                </div>
+                <div id="partialMatchesList"></div>
+            </div>
+        </div>
+
+        <div id="participants-tab" class="tab-content">
+            <div class="card">
+                <h3 class="section-title">👥 Alle Teilnehmer & ihre Verfügbarkeit</h3>
+                <div id="participantsList"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
