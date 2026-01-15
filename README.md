@@ -3,7 +3,8 @@ Eine Applikation um im Freundeskreis Termine zu synchronisieren
 
 
 
-Hier sind die User Stories für deine Verabredungs-Synchronisierungs-App:
+EIn Clickdummy der auch die Optik vorgibt ist in clickdummy.html hinterlegt, bitte daran orientieren.
+Hier sind die User Stories für die Verabredungs-Synchronisierungs-App:
 
 ## Epic: Verabredung Synchronisieren - Terminkoordination mit Zeitfenstern
 
