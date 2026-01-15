@@ -1,8 +1,6 @@
 # Terminfinder
 Eine Applikation um im Freundeskreis Termine zu synchronisieren
 
-
-
 EIn Clickdummy der auch die Optik vorgibt ist in clickdummy.html hinterlegt, bitte daran orientieren.
 Hier sind die User Stories für die Verabredungs-Synchronisierungs-App:
 
@@ -155,7 +153,7 @@ Hier sind die User Stories für die Verabredungs-Synchronisierungs-App:
 
 ### **User Story 11: Gruppen laden und synchronisieren**
 **Als** Nutzer  
-**möchte ich** dass die Gruppendaten automatisch geladen werden, wenn ich Code und Passwort eingebe  
+**möchte ich** dass die Gruppendaten automatisch geladen werden, wenn Code und Passwort eingebe  
 **damit** ich sofort die aktuellen Verfügbarkeiten sehe.
 
 **Akzeptanzkriterien:**
@@ -218,5 +216,19 @@ Hier sind die User Stories für die Verabredungs-Synchronisierungs-App:
 5. **Browser-Kompatibilität**: Moderne Browser (Chrome, Firefox, Safari, Edge - letzte 2 Versionen)
 
 ---
+
+## Lokale Entwicklung
+
+### Voraussetzungen
+- Docker & Docker Compose
+
+### Starten
+```bash
+docker compose up --build
+```
+Die Anwendung ist danach unter `http://localhost:8080` erreichbar.
+
+### Datenpersistenz
+Die Verfügbarkeiten und Gruppen-Passwörter werden in einer SQLite-Datenbank im Docker-Volume `terminfinder_data` gespeichert.
 
 Möchtest du noch zusätzliche Details zu bestimmten Stories oder weitere User Stories für spezielle Features?
