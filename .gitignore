@@ -20,4 +20,4 @@ vendor/
 
 # Test coverage and PHPUnit cache
 coverage/
-.phpunit.cache
+.phpunit.cache/
