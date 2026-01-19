@@ -10,6 +10,7 @@ let groupData = {};
 let currentUser = '';
 let currentCode = '';
 let isAuthenticated = false;
+let isLoadingUserData = false; // Flag to prevent auto-save during data loading
 
 // Auto-save timer
 let autoSaveTimer = null;
@@ -113,18 +114,33 @@ async function authenticateGroup(code, password) {
 }
 
 function normalizeAvailabilitiesForApi(availabilities) {
-    // If already an array (array-of-objects), return as-is
-    if (Array.isArray(availabilities)) return availabilities;
+    console.log('normalizeAvailabilitiesForApi input:', availabilities);
 
-    // If it's an object mapping date => [slots], convert to array of objects
-    const result = [];
-    for (const [date, slots] of Object.entries(availabilities || {})) {
-        if (!Array.isArray(slots)) continue;
-        slots.forEach(slot => {
-            result.push({ date: date, timeSlot: slot, available: true });
-        });
+    // Handle arrays first
+    if (Array.isArray(availabilities)) {
+        // Detect arrays that are used like objects with string keys (these are not serialized by JSON.stringify and become [])
+        const keys = Object.keys(availabilities);
+        const hasNonNumericKey = keys.some(k => isNaN(Number(k)));
+        if (hasNonNumericKey && keys.length > 0) {
+            const obj = {};
+            keys.forEach(k => { obj[k] = availabilities[k]; });
+            console.warn('normalizeAvailabilitiesForApi converted array-with-string-keys to object:', obj);
+            return obj;
+        }
+
+        // Otherwise it's a proper array-of-objects (format 2)
+        console.log('returning array as-is:', availabilities);
+        return availabilities;
     }
-    return result;
+
+    // If it's an object mapping date => [slots], return it as-is (backend supports associative format)
+    if (availabilities && typeof availabilities === 'object') {
+        console.log('returning object mapping as-is:', availabilities);
+        return availabilities;
+    }
+
+    console.log('normalizeAvailabilitiesForApi result: []');
+    return [];
 }
 
 async function saveUserAvailability(groupCode, userName, availabilities) {
@@ -157,7 +173,23 @@ async function getUserAvailability(groupCode, userName) {
 
 // Debounced auto-save of current selectedSlots for the logged-in user
 function scheduleAutoSave() {
+    console.log('scheduleAutoSave called:', { 
+        isAuthenticated, 
+        currentCode, 
+        currentUser, 
+        selectedSlots, 
+        slotsCount: Object.keys(selectedSlots).length,
+        isLoadingUserData
+    });
+    
     if (!isAuthenticated || !currentCode || !currentUser) return;
+    
+    // Don't auto-save if we're currently loading user data
+    if (isLoadingUserData) return;
+    
+    // Don't auto-save if no slots are selected
+    if (Object.keys(selectedSlots).length === 0) return;
+    
     if (autoSaveTimer) clearTimeout(autoSaveTimer);
     autoSaveTimer = setTimeout(async () => {
         try {
@@ -189,6 +221,7 @@ async function onNameBlur() {
     }
 
     currentUser = name;
+    isLoadingUserData = true; // Set flag to prevent auto-save during loading
 
     try {
         const res = await getUserAvailability(currentCode, currentUser);
@@ -203,6 +236,8 @@ async function onNameBlur() {
         }
     } catch (e) {
         showMessage('Fehler beim Laden deiner Termine: ' + e.message, 'error');
+    } finally {
+        isLoadingUserData = false; // Clear flag after loading is complete
     }
 } 
 
@@ -567,6 +602,8 @@ function renderCalendar() {
 }
 
 function toggleTimeSlot(dateStr, slot, element) {
+    console.log('toggleTimeSlot called:', { dateStr, slot, currentSlots: selectedSlots });
+    
     if (!selectedSlots[dateStr]) {
         selectedSlots[dateStr] = [];
     }
@@ -582,6 +619,8 @@ function toggleTimeSlot(dateStr, slot, element) {
         selectedSlots[dateStr].push(slot);
         element.classList.add('selected');
     }
+    
+    console.log('selectedSlots after toggle:', selectedSlots);
 
     // Schedule an auto-save after changes
     scheduleAutoSave();

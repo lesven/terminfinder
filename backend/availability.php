@@ -19,9 +19,13 @@ corsHeaders();
 class AvailabilityAPI {
     private $db;
     
-    public function __construct() {
-        $database = new Database();
-        $this->db = $database->connect();
+    public function __construct($database = null) {
+        if ($database) {
+            $this->db = $database;
+        } else {
+            $databaseConnection = new Database();
+            $this->db = $databaseConnection->connect();
+        }
     }
     
     /**
@@ -29,6 +33,15 @@ class AvailabilityAPI {
      */
     public function saveAvailability($groupCode, $userName, $availabilities) {
         try {
+            // First, check if group exists
+            $groupCheckStmt = $this->db->prepare("SELECT COUNT(*) FROM `groups` WHERE code = ?");
+            $groupCheckStmt->execute([$groupCode]);
+            $groupExists = $groupCheckStmt->fetchColumn();
+            
+            if (!$groupExists) {
+                return ['success' => false, 'message' => 'Group not found. Please make sure the group code exists.'];
+            }
+            
             $this->db->beginTransaction();
             
             // First, delete existing availabilities for this user in this group
@@ -45,7 +58,9 @@ class AvailabilityAPI {
             // 1) Associative: { "2026-01-20": ["morning","afternoon"], ... }
             // 2) List of objects: [ { date: "2026-01-20", timeSlot: "10:00", available: true }, ... ]
             if (!is_array($availabilities) || empty($availabilities)) {
-                // nothing to insert
+                // Empty availabilities means delete all for this user
+                $this->db->commit();
+                return ['success' => true, 'message' => 'All availabilities cleared for user'];
             } else {
                 $firstKey = array_key_first($availabilities);
                 $firstVal = $availabilities[$firstKey];
@@ -85,13 +100,19 @@ class AvailabilityAPI {
                         $insertStmt->execute([$groupCode, $userName, $date, $timeSlot]);
                     }
                 }
+                
+                $this->db->commit();
+                return ['success' => true, 'message' => 'Availability saved successfully'];
             }
-            
-            $this->db->commit();
-            return ['success' => true, 'message' => 'Availability saved successfully'];
             
         } catch (Exception $e) {
             $this->db->rollback();
+            
+            // Check for foreign key constraint violation (group doesn't exist)
+            if (strpos($e->getMessage(), '1452') !== false || strpos($e->getMessage(), 'foreign key constraint') !== false) {
+                return ['success' => false, 'message' => 'Group not found. Please make sure the group code exists.'];
+            }
+            
             return ['success' => false, 'message' => 'Failed to save availability: ' . $e->getMessage()];
         }
     }
@@ -151,56 +172,58 @@ class AvailabilityAPI {
     }
 }
 
-// Handle API requests
-$method = $_SERVER['REQUEST_METHOD'];
-$api = new AvailabilityAPI();
+// Handle API requests only if we're not in CLI mode (e.g., during testing)
+if (php_sapi_name() !== 'cli') {
+    $method = $_SERVER['REQUEST_METHOD'];
+    $api = new AvailabilityAPI();
 
-if ($method === 'POST') {
-    $input = getJsonInput();
-    $action = $input['action'] ?? '';
-    
-    switch ($action) {
-        case 'save':
-            // availabilities can be empty (means delete all for user), so only require groupCode and userName
-            $error = validateRequired($input, ['groupCode', 'userName']);
-            if ($error) {
-                sendErrorResponse($error);
-            }
-            
-            $avail = $input['availabilities'] ?? [];
-            $result = $api->saveAvailability(
-                $input['groupCode'], 
-                $input['userName'], 
-                $avail
-            );
-            sendJsonResponse($result);
-            break;
-            
-        case 'getUserAvailability':
-            $error = validateRequired($input, ['groupCode', 'userName']);
-            if ($error) {
-                sendErrorResponse($error);
-            }
-            
-            $result = $api->getUserAvailability($input['groupCode'], $input['userName']);
-            sendJsonResponse($result);
-            break;
-            
-        case 'getParticipants':
-            $error = validateRequired($input, ['groupCode']);
-            if ($error) {
-                sendErrorResponse($error);
-            }
-            
-            $result = $api->getParticipants($input['groupCode']);
-            sendJsonResponse($result);
-            break;
-            
-        default:
-            sendErrorResponse('Invalid action');
+    if ($method === 'POST') {
+        $input = getJsonInput();
+        $action = $input['action'] ?? '';
+        
+        switch ($action) {
+            case 'save':
+                // availabilities can be empty (means delete all for user), so only require groupCode and userName
+                $error = validateRequired($input, ['groupCode', 'userName']);
+                if ($error) {
+                    sendErrorResponse($error);
+                }
+                
+                $avail = $input['availabilities'] ?? [];
+                $result = $api->saveAvailability(
+                    $input['groupCode'], 
+                    $input['userName'], 
+                    $avail
+                );
+                sendJsonResponse($result);
+                break;
+                
+            case 'getUserAvailability':
+                $error = validateRequired($input, ['groupCode', 'userName']);
+                if ($error) {
+                    sendErrorResponse($error);
+                }
+                
+                $result = $api->getUserAvailability($input['groupCode'], $input['userName']);
+                sendJsonResponse($result);
+                break;
+                
+            case 'getParticipants':
+                $error = validateRequired($input, ['groupCode']);
+                if ($error) {
+                    sendErrorResponse($error);
+                }
+                
+                $result = $api->getParticipants($input['groupCode']);
+                sendJsonResponse($result);
+                break;
+                
+            default:
+                sendErrorResponse('Invalid action');
+        }
+        
+    } else {
+        sendErrorResponse('Method not allowed', 405);
     }
-    
-} else {
-    sendErrorResponse('Method not allowed', 405);
 }
 ?>

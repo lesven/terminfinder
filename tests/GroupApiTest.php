@@ -155,13 +155,11 @@ class GroupApiTest extends TestCase {
 
         // success()
         $m = $ref->getMethod('success');
-        $m->setAccessible(true);
         $s = $m->invoke($this->api, []);
         $this->assertTrue($s['success']);
 
         // error()
         $m = $ref->getMethod('error');
-        $m->setAccessible(true);
         $e = $m->invoke($this->api, 'oops');
         $this->assertFalse($e['success']);
         $this->assertEquals('oops', $e['message']);
@@ -173,36 +171,30 @@ class GroupApiTest extends TestCase {
 
         // groupExists()
         $m = $ref->getMethod('groupExists');
-        $m->setAccessible(true);
         $this->assertTrue($m->invoke($this->api, 'refgrp'));
         $this->assertFalse($m->invoke($this->api, 'nope'));
 
         // getPasswordHash() -> null when absent
         $m = $ref->getMethod('getPasswordHash');
-        $m->setAccessible(true);
         $this->assertNull($m->invoke($this->api, 'refgrp'));
 
         // fetchAll()
         $m = $ref->getMethod('fetchAll');
-        $m->setAccessible(true);
         $rows = $m->invoke($this->api, "SELECT user_name FROM availabilities WHERE group_code = ?", ['refgrp']);
         $this->assertNotEmpty($rows);
 
         // fetchOne()
         $m = $ref->getMethod('fetchOne');
-        $m->setAccessible(true);
         $row = $m->invoke($this->api, "SELECT user_name FROM availabilities WHERE group_code = ? LIMIT 1", ['refgrp']);
         $this->assertEquals('R', $row['user_name']);
 
         // execute()
         $m = $ref->getMethod('execute');
-        $m->setAccessible(true);
         $res = $m->invoke($this->api, "INSERT INTO availabilities (group_code,user_name,date,time_slot) VALUES (?, ?, ?, ?)", ['refgrp','S','2026-01-22','evening']);
         $this->assertInstanceOf(PDOStatement::class, $res);
 
         // groupDataFromRows()
         $m = $ref->getMethod('groupDataFromRows');
-        $m->setAccessible(true);
         $rows = [ ['user_name' => 'A', 'date' => '2026-01-20', 'time_slot' => 'morning'], ['user_name' => 'A', 'date' => '2026-01-20', 'time_slot' => 'afternoon'] ];
         $gd = $m->invoke($this->api, $rows);
         $this->assertArrayHasKey('A', $gd);
@@ -227,7 +219,6 @@ class GroupApiTest extends TestCase {
         // Now call createGroup directly and ensure rollback path is taken
         $ref = new ReflectionClass($api);
         $m = $ref->getMethod('createGroup');
-        $m->setAccessible(true);
         $r = $m->invoke($api, 'willfail2', 'pw');
         $this->assertFalse($r['success']);
         $this->assertStringContainsString('Failed to create group', $r['message']);
@@ -251,5 +242,117 @@ class GroupApiTest extends TestCase {
         $a = $api->authenticateWithToken('token');
         $this->assertFalse($a['success']);
         $this->assertStringContainsString('Failed to authenticate token', $a['message']);
+    }
+
+    public function testConstructorFallbackToDatabase() {
+        // Test constructor with null PDO (should fallback to Database class)
+        // Skip if database driver not available in test environment
+        try {
+            $api = new GroupAPI(null);
+            $this->assertInstanceOf(GroupAPI::class, $api);
+            
+            // Test constructor with non-PDO parameter
+            $api2 = new GroupAPI('not-a-pdo');
+            $this->assertInstanceOf(GroupAPI::class, $api2);
+        } catch (Exception $e) {
+            $this->markTestSkipped('Database driver not available in test environment: ' . $e->getMessage());
+        }
+    }
+
+    public function testTokenLengthAndRandomness() {
+        $this->pdo->exec("INSERT INTO groups (code) VALUES ('toktest')");
+        $pw = hashPassword('pw');
+        $stmt = $this->pdo->prepare("INSERT INTO group_passwords (group_code, password_hash) VALUES (?, ?)");
+        $stmt->execute(['toktest', $pw]);
+
+        $create1 = $this->api->createShareLink('toktest', 'pw', 1, 0);
+        $create2 = $this->api->createShareLink('toktest', 'pw', 1, 0);
+        
+        $this->assertTrue($create1['success']);
+        $this->assertTrue($create2['success']);
+        
+        // Tokens should be different (randomness)
+        $this->assertNotEquals($create1['token'], $create2['token']);
+        
+        // Tokens should be 32 hex chars (16 bytes * 2)
+        $this->assertEquals(32, strlen($create1['token']));
+        $this->assertTrue(ctype_xdigit($create1['token']));
+    }
+
+    public function testShareLinkExpiryLogic() {
+        $this->pdo->exec("INSERT INTO groups (code) VALUES ('exptest')");
+        $pw = hashPassword('pw');
+        $stmt = $this->pdo->prepare("INSERT INTO group_passwords (group_code, password_hash) VALUES (?, ?)");
+        $stmt->execute(['exptest', $pw]);
+
+        // Test with TTL = 0 (no expiry)
+        $create = $this->api->createShareLink('exptest', 'pw', 0, 0);
+        $this->assertTrue($create['success']);
+        $this->assertNull($create['expires_at']);
+        
+        // Test with TTL = 1 (expires in 1 day)
+        $create2 = $this->api->createShareLink('exptest', 'pw', 1, 0);
+        $this->assertTrue($create2['success']);
+        $this->assertNotNull($create2['expires_at']);
+        
+        // expires_at should be roughly 1 day from now
+        $expiryTime = strtotime($create2['expires_at']);
+        $expectedTime = time() + (24 * 3600);
+        $this->assertLessThan(60, abs($expiryTime - $expectedTime)); // within 1 minute
+    }
+
+    public function testGroupDataStructureComplexity() {
+        $this->pdo->exec("INSERT INTO groups (code) VALUES ('complex')");
+        $stmt = $this->pdo->prepare("INSERT INTO availabilities (group_code, user_name, date, time_slot) VALUES (?, ?, ?, ?)");
+        
+        // Multiple users, dates, and time slots
+        $stmt->execute(['complex', 'Alice', '2026-01-20', 'morning']);
+        $stmt->execute(['complex', 'Alice', '2026-01-20', 'afternoon']);
+        $stmt->execute(['complex', 'Alice', '2026-01-21', 'evening']);
+        $stmt->execute(['complex', 'Bob', '2026-01-20', 'morning']);
+        $stmt->execute(['complex', 'Bob', '2026-01-22', 'afternoon']);
+        $stmt->execute(['complex', 'Charlie', '2026-01-23', '10:00']);
+        
+        $res = $this->api->getGroupData('complex');
+        $this->assertTrue($res['success']);
+        $data = $res['data'];
+        
+        // Verify structure
+        $this->assertCount(3, $data); // 3 users
+        $this->assertArrayHasKey('Alice', $data);
+        $this->assertArrayHasKey('Bob', $data);
+        $this->assertArrayHasKey('Charlie', $data);
+        
+        // Alice should have 2 dates
+        $this->assertCount(2, $data['Alice']);
+        $this->assertArrayHasKey('2026-01-20', $data['Alice']);
+        $this->assertArrayHasKey('2026-01-21', $data['Alice']);
+        
+        // Alice's 2026-01-20 should have 2 time slots
+        $this->assertCount(2, $data['Alice']['2026-01-20']);
+        $this->assertContains('morning', $data['Alice']['2026-01-20']);
+        $this->assertContains('afternoon', $data['Alice']['2026-01-20']);
+        
+        // Charlie should have specific time format
+        $this->assertContains('10:00', $data['Charlie']['2026-01-23']);
+    }
+
+    public function testAuthenticateGroupVariousPasswordScenarios() {
+        // Test various password edge cases
+        $tests = [
+            ['code' => 'empty_pw', 'password' => ''],
+            ['code' => 'space_pw', 'password' => ' '],
+            ['code' => 'special_pw', 'password' => '!@#$%^&*()'],
+            ['code' => 'unicode_pw', 'password' => 'тест123'],
+            ['code' => 'long_pw', 'password' => str_repeat('a', 100)]
+        ];
+        
+        foreach ($tests as $test) {
+            $res1 = $this->api->authenticateGroup($test['code'], $test['password']);
+            $this->assertTrue($res1['success'], "Failed to create group with password: {$test['password']}");
+            
+            $res2 = $this->api->authenticateGroup($test['code'], $test['password']);
+            $this->assertTrue($res2['success'], "Failed to authenticate with password: {$test['password']}");
+        }
     }
 }
