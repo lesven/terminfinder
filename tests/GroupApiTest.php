@@ -83,4 +83,173 @@ class GroupApiTest extends TestCase {
         $this->assertFalse($a2['success']);
         $this->assertEquals('Token already used', $a2['message']);
     }
+
+    public function testAuthenticateGroupWithoutPassword() {
+        $this->pdo->exec("INSERT INTO groups (code) VALUES ('nopw')");
+        $res = $this->api->authenticateGroup('nopw', 'whatever');
+        $this->assertFalse($res['success']);
+        $this->assertEquals('Group password not found', $res['message']);
+    }
+
+    public function testCreateShareLinkNoExpiryAndInvalidPassword() {
+        $this->pdo->exec("INSERT INTO groups (code) VALUES ('grp2')");
+        $pw = hashPassword('pw2');
+        $stmt = $this->pdo->prepare("INSERT INTO group_passwords (group_code, password_hash) VALUES (?, ?)");
+        $stmt->execute(['grp2', $pw]);
+
+        $bad = $this->api->createShareLink('grp2', 'wrong', 7, 0);
+        $this->assertFalse($bad['success']);
+
+        $noExpiry = $this->api->createShareLink('grp2', 'pw2', 0, 0);
+        $this->assertTrue($noExpiry['success']);
+        $this->assertArrayHasKey('token', $noExpiry);
+        $this->assertArrayHasKey('expires_at', $noExpiry);
+        $this->assertNull($noExpiry['expires_at']);
+    }
+
+    public function testAuthenticateWithExpiredTokenAndUsedAtSet() {
+        $this->pdo->exec("INSERT INTO groups (code) VALUES ('expiregrp')");
+        $pw = hashPassword('pw');
+        $stmt = $this->pdo->prepare("INSERT INTO group_passwords (group_code, password_hash) VALUES (?, ?)");
+        $stmt->execute(['expiregrp', $pw]);
+
+        $token = 'deadbeefdeadbeefdeadbeefdeadbeef';
+        $tokenHash = hash('sha256', $token);
+        $this->pdo->prepare("INSERT INTO share_links (group_code, token_hash, expires_at, single_use) VALUES (?, ?, ?, ?)")
+            ->execute(['expiregrp', $tokenHash, '2000-01-01 00:00:00', 0]);
+
+        $res = $this->api->authenticateWithToken($token);
+        $this->assertFalse($res['success']);
+        $this->assertEquals('Invalid or expired token', $res['message']);
+
+        // single-use used_at set check
+        $create = $this->api->createShareLink('expiregrp', 'pw', 1, 1);
+        $this->assertTrue($create['success']);
+        $token2 = $create['token'];
+        $a1 = $this->api->authenticateWithToken($token2);
+        $this->assertTrue($a1['success']);
+
+        $stmt = $this->pdo->prepare("SELECT used_at FROM share_links WHERE token_hash = ?");
+        $stmt->execute([hash('sha256', $token2)]);
+        $row = $stmt->fetch();
+        $this->assertNotNull($row['used_at']);
+    }
+
+    public function testGetGroupDataEmpty() {
+        $this->pdo->exec("INSERT INTO groups (code) VALUES ('emptygrp')");
+        $pw = hashPassword('pw');
+        $stmt = $this->pdo->prepare("INSERT INTO group_passwords (group_code, password_hash) VALUES (?, ?)");
+        $stmt->execute(['emptygrp', $pw]);
+
+        $res = $this->api->getGroupData('emptygrp');
+        $this->assertTrue($res['success']);
+        $this->assertEquals([], $res['data']);
+    }
+
+    public function testPrivateHelpersViaReflection() {
+        // insert some data to use with fetchAll/fetchOne/execute
+        $this->pdo->exec("INSERT INTO groups (code) VALUES ('refgrp')");
+        $this->pdo->exec("INSERT INTO availabilities (group_code, user_name, date, time_slot) VALUES ('refgrp','R','2026-01-22','morning')");
+
+        $ref = new ReflectionClass($this->api);
+
+        // success()
+        $m = $ref->getMethod('success');
+        $m->setAccessible(true);
+        $s = $m->invoke($this->api, []);
+        $this->assertTrue($s['success']);
+
+        // error()
+        $m = $ref->getMethod('error');
+        $m->setAccessible(true);
+        $e = $m->invoke($this->api, 'oops');
+        $this->assertFalse($e['success']);
+        $this->assertEquals('oops', $e['message']);
+
+        // error() with code arg
+        $e2 = $m->invoke($this->api, 'err', 42);
+        $this->assertArrayHasKey('code', $e2);
+        $this->assertEquals(42, $e2['code']);
+
+        // groupExists()
+        $m = $ref->getMethod('groupExists');
+        $m->setAccessible(true);
+        $this->assertTrue($m->invoke($this->api, 'refgrp'));
+        $this->assertFalse($m->invoke($this->api, 'nope'));
+
+        // getPasswordHash() -> null when absent
+        $m = $ref->getMethod('getPasswordHash');
+        $m->setAccessible(true);
+        $this->assertNull($m->invoke($this->api, 'refgrp'));
+
+        // fetchAll()
+        $m = $ref->getMethod('fetchAll');
+        $m->setAccessible(true);
+        $rows = $m->invoke($this->api, "SELECT user_name FROM availabilities WHERE group_code = ?", ['refgrp']);
+        $this->assertNotEmpty($rows);
+
+        // fetchOne()
+        $m = $ref->getMethod('fetchOne');
+        $m->setAccessible(true);
+        $row = $m->invoke($this->api, "SELECT user_name FROM availabilities WHERE group_code = ? LIMIT 1", ['refgrp']);
+        $this->assertEquals('R', $row['user_name']);
+
+        // execute()
+        $m = $ref->getMethod('execute');
+        $m->setAccessible(true);
+        $res = $m->invoke($this->api, "INSERT INTO availabilities (group_code,user_name,date,time_slot) VALUES (?, ?, ?, ?)", ['refgrp','S','2026-01-22','evening']);
+        $this->assertInstanceOf(PDOStatement::class, $res);
+
+        // groupDataFromRows()
+        $m = $ref->getMethod('groupDataFromRows');
+        $m->setAccessible(true);
+        $rows = [ ['user_name' => 'A', 'date' => '2026-01-20', 'time_slot' => 'morning'], ['user_name' => 'A', 'date' => '2026-01-20', 'time_slot' => 'afternoon'] ];
+        $gd = $m->invoke($this->api, $rows);
+        $this->assertArrayHasKey('A', $gd);
+        $this->assertContains('morning', $gd['A']['2026-01-20']);
+    }
+
+    public function testCreateGroupFailureRollback() {
+        // PDO stub that throws on group_passwords insert
+        // Use a real in-memory SQLite PDO and add a trigger that aborts insert into group_passwords
+        $pdo = new PDO('sqlite::memory:');
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $pdo->exec("CREATE TABLE groups (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT NOT NULL UNIQUE)");
+        $pdo->exec("CREATE TABLE group_passwords (id INTEGER PRIMARY KEY AUTOINCREMENT, group_code TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL)");
+        // trigger to fail password insert
+        $pdo->exec("CREATE TRIGGER fail_pw_insert BEFORE INSERT ON group_passwords BEGIN SELECT RAISE(ABORT,'insert failed'); END;");
+
+        $api = new GroupAPI($pdo);
+        $res = $api->authenticateGroup('willfail', 'pw');
+        $this->assertFalse($res['success']);
+        $this->assertStringContainsString('Failed to create group', $res['message']);
+
+        // Now call createGroup directly and ensure rollback path is taken
+        $ref = new ReflectionClass($api);
+        $m = $ref->getMethod('createGroup');
+        $m->setAccessible(true);
+        $r = $m->invoke($api, 'willfail2', 'pw');
+        $this->assertFalse($r['success']);
+        $this->assertStringContainsString('Failed to create group', $r['message']);
+    }
+
+    public function testDatabaseErrorsBubbleUp() {
+        // stub that throws on fetchAll / fetchOne to trigger catch blocks
+        // Use a PDO without tables to trigger "no such table" exceptions in the methods
+        $pdo = new PDO('sqlite::memory:');
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+        $api = new GroupAPI($pdo);
+        $g = $api->getGroupData('x');
+        $this->assertFalse($g['success']);
+        $this->assertStringContainsString('Failed to get group data', $g['message']);
+
+        $c = $api->createShareLink('x', 'pw');
+        $this->assertFalse($c['success']);
+        $this->assertStringContainsString('Failed to create share link', $c['message']);
+
+        $a = $api->authenticateWithToken('token');
+        $this->assertFalse($a['success']);
+        $this->assertStringContainsString('Failed to authenticate token', $a['message']);
+    }
 }
