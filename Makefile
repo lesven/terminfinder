@@ -1,7 +1,7 @@
 # Terminfinder Makefile
 # Praktische Befehle für Docker-Verwaltung
 
-.PHONY: help start stop restart logs clean status shell db install
+.PHONY: help start stop restart logs clean status shell db install test
 
 # Standard Target
 help: ## Zeigt diese Hilfe an
@@ -103,7 +103,10 @@ update: ## Updated Container Images
 	@echo "🔄 Starte Container neu..."
 	docker-compose up -d
 	@echo "✅ Update abgeschlossen!"
-
+# Tests
+test: ## Führt PHPUnit-Tests im Composer-Container aus
+	@echo "🧪 PHPUnit Tests werden ausgeführt..."
+	@docker run --rm -v $(PWD):/app -w /app composer php ./vendor/bin/phpunit --configuration phpunit.xml
 # Quick Actions
 open: ## Öffnet Terminfinder im Browser
 	@echo "🌐 Öffne http://localhost:8070"
