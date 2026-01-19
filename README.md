@@ -1,9 +1,78 @@
 # Terminfinder
 Eine Applikation um im Freundeskreis Termine zu synchronisieren
 
+## 🚀 Installation und Start
 
+### Voraussetzungen
+- Docker und Docker Compose
+- Port 8080 und 3306 müssen frei sein
 
-EIn Clickdummy der auch die Optik vorgibt ist in clickdummy.html hinterlegt, bitte daran orientieren.
+### Schnellstart
+1. **Repository klonen oder Dateien in einen Ordner legen**
+
+2. **Docker Container starten:**
+   ```bash
+   docker-compose up -d
+   ```
+
+3. **Applikation öffnen:**
+   - Terminfinder: http://localhost:8080
+   - phpMyAdmin (Datenbank-Verwaltung): http://localhost:8081
+
+### Erste Schritte
+1. Öffne http://localhost:8080 in deinem Browser
+2. Gib deinen Namen ein
+3. Erstelle eine neue Gruppe mit Code und Passwort (z.B. "team2024" / "meinpasswort")
+4. Wähle deine verfügbaren Zeitfenster im Kalender
+5. Speichere deine Verfügbarkeit
+6. Teile Code und Passwort mit deinen Freunden
+
+### Demo-Daten
+Es gibt bereits eine Demo-Gruppe:
+- **Code:** demo2024
+- **Passwort:** demo123
+
+## 🛠️ Technische Details
+
+### Architektur
+- **Frontend:** HTML, CSS, JavaScript (Vanilla)
+- **Backend:** PHP 8.2 mit REST API
+- **Datenbank:** MySQL 8.0
+- **Infrastruktur:** Docker Compose
+
+### API Endpoints
+- `POST /api/groups.php` - Gruppenauthorisierung und Datenabruf
+- `POST /api/availability.php` - Verfügbarkeiten speichern und abrufen
+
+### Datenbank Schema
+- `groups` - Gruppencodes
+- `group_passwords` - Verschlüsselte Passwörter
+- `availabilities` - Nutzer-Verfügbarkeiten
+
+### Ports
+- **8080:** Webserver (Terminfinder App)
+- **8081:** phpMyAdmin
+- **3306:** MySQL Datenbank
+
+## 🔧 Entwicklung
+
+### Container stoppen
+```bash
+docker-compose down
+```
+
+### Container mit Logs anzeigen
+```bash
+docker-compose up
+```
+
+### Datenbank zurücksetzen
+```bash
+docker-compose down -v
+docker-compose up -d
+```
+
+---
 Hier sind die User Stories für die Verabredungs-Synchronisierungs-App:
 
 ## Epic: Verabredung Synchronisieren - Terminkoordination mit Zeitfenstern

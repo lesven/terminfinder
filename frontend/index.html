@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terminfinder - Verabredung Synchronisieren</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+            animation: fadeIn 0.6s ease-in;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .subtitle {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .tab:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .tab.active {
+            background: white;
+            color: #667eea;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            margin-bottom: 30px;
+            animation: slideUp 0.6s ease-out;
+        }
+
+        .input-section {
+            display: grid;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        label {
+            font-weight: 600;
+            color: #333;
+            font-size: 0.95em;
+        }
+
+        input {
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 1em;
+            transition: all 0.3s ease;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .calendar-section {
+            margin-top: 30px;
+        }
+
+        .calendar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .section-title {
+            font-size: 1.5em;
+            color: #333;
+            font-weight: 600;
+        }
+
+        .month-nav {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .nav-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.2em;
+            transition: all 0.3s ease;
+        }
+
+        .nav-btn:hover {
+            background: #5568d3;
+            transform: scale(1.1);
+        }
+
+        .month-display {
+            font-size: 1.3em;
+            font-weight: 600;
+            color: #333;
+            min-width: 200px;
+            text-align: center;
+        }
+
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .day-label {
+            text-align: center;
+            font-weight: 600;
+            color: #666;
+            padding: 10px;
+            font-size: 0.9em;
+        }
+
+        .day-cell {
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            position: relative;
+            padding: 8px;
+            min-height: 80px;
+        }
+
+        .day-cell:hover:not(.empty) {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        .day-cell.empty {
+            border: none;
+        }
+
+        .day-number {
+            text-align: center;
+            margin-bottom: 8px;
+            font-size: 1.1em;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 5px;
+            transition: all 0.2s ease;
+        }
+
+        .day-number:hover {
+            background: #f3f4f6;
+        }
+
+        .time-slots {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .time-slot {
+            padding: 4px 6px;
+            border-radius: 5px;
+            font-size: 0.75em;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 1px solid #e0e0e0;
+            background: white;
+        }
+
+        .time-slot:hover {
+            background: #f3f4f6;
+        }
+
+        .time-slot.selected {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 20px;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .participant-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            border-left: 4px solid #667eea;
+        }
+
+        .participant-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+            font-size: 1.1em;
+        }
+
+        .participant-dates {
+            color: #666;
+            font-size: 0.95em;
+        }
+
+        .legend {
+            display: flex;
+            gap: 20px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9em;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+        }
+
+        .success-message {
+            background: #d4edda;
+            color: #155724;
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            border-left: 4px solid #28a745;
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            border-left: 4px solid #dc3545;
+        }
+
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #ffffff;
+            border-top: 2px solid transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .submit-btn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+
+        .no-data {
+            text-align: center;
+            color: #999;
+            padding: 40px;
+            font-style: italic;
+        }
+
+        .success-message {
+            background: #10b981;
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            text-align: center;
+            animation: slideUp 0.4s ease-out;
+        }
+
+        .error-message {
+            background: #ef4444;
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            text-align: center;
+            animation: slideUp 0.4s ease-out;
+        }
+
+        .match-card {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(16, 185, 129, 0.3);
+        }
+
+        .partial-match-card {
+            background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(251, 191, 36, 0.3);
+        }
+
+        .match-date {
+            font-size: 1.8em;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+
+        .match-time-slots {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+
+        .match-time-badge {
+            background: rgba(255, 255, 255, 0.3);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.9em;
+        }
+
+        .info-box {
+            background: #f0f9ff;
+            border-left: 4px solid #3b82f6;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .info-box-title {
+            font-weight: 600;
+            color: #1e40af;
+            margin-bottom: 5px;
+        }
+
+        .info-box-text {
+            color: #1e40af;
+            font-size: 0.95em;
+        }
+
+        .time-badge {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            margin-right: 6px;
+            margin-bottom: 4px;
+            font-size: 0.85em;
+        }
+
+        .loading {
+            opacity: 0.7;
+            pointer-events: none;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @media (max-width: 768px) {
+            h1 { font-size: 2em; }
+            .card { padding: 20px; }
+            .calendar-grid { gap: 5px; }
+            .day-cell {
+                font-size: 0.85em;
+                min-height: 70px;
+                padding: 5px;
+            }
+            .time-slot {
+                font-size: 0.65em;
+                padding: 3px 4px;
+            }
+            .tabs { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📅 Terminfinder</h1>
+            <p class="subtitle">Finde den perfekten Tag und die perfekte Uhrzeit für euer Team</p>
+        </header>
+
+        <!-- Debug Button für Entwicklung -->
+        <div style="margin: 20px 0; padding: 10px; background: #f0f0f0; border-radius: 5px;">
+            <button onclick="testLogin()">Test Login (FAMILIE/familie123)</button>
+            <button onclick="testData()">Zeige aktuelle Daten</button>
+        </div>
+
+        <!-- Login Status -->
+        <div id="loginStatus" class="card">
+            <h3 class="section-title">🔐 Anmeldung erforderlich</h3>
+            <div class="info-box">
+                <div class="info-box-title">Bitte melde dich an</div>
+                <div class="info-box-text">Gib deinen Gruppen-Code und Passwort ein und klicke auf "Anmelden"</div>
+            </div>
+            <div class="input-section">
+                <div class="input-group">
+                    <label for="loginCode">Gruppen-Code</label>
+                    <input type="text" id="loginCode" placeholder="z.B. FAMILIE">
+                </div>
+                <div class="input-group">
+                    <label for="loginPassword">Passwort</label>
+                    <input type="password" id="loginPassword" placeholder="Gruppen-Passwort">
+                </div>
+            </div>
+            <button class="submit-btn" onclick="handleLogin()" id="loginBtn">Anmelden</button>
+            <div id="loginMessageContainer"></div>
+        </div>
+
+        <div id="mainApp" style="display: none;">
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('availability')">Meine Verfügbarkeit</button>
+                <button class="tab" onclick="switchTab('matches')">Gemeinsame Termine</button>
+                <button class="tab" onclick="switchTab('participants')">Alle Teilnehmer</button>
+            </div>
+
+        <div id="availability-tab" class="tab-content active">
+            <div class="card">
+                <div class="info-box">
+                    <div class="info-box-title">🔒 So funktioniert's</div>
+                    <div class="info-box-text">Gib deinen Namen, Gruppen-Code und Passwort ein. Wähle dann für jeden Tag die Zeitfenster: Vormittag (VM), Nachmittag (NM) oder Abend (AB).</div>
+                </div>
+                <div class="input-section">
+                    <div class="input-group">
+                        <label for="name">Dein Name</label>
+                        <input type="text" id="name" placeholder="z.B. Max Mustermann">
+                    </div>
+                    <div class="info-box">
+                        <div class="info-box-title">✅ Angemeldet</div>
+                        <div class="info-box-text">Du bist erfolgreich angemeldet als Gruppe: <strong id="currentGroupDisplay"></strong></div>
+                    </div>
+                </div>
+
+                <div class="calendar-section">
+                    <div class="calendar-header">
+                        <h3 class="section-title">Wähle deine verfügbaren Zeiten</h3>
+                        <div class="month-nav">
+                            <button class="nav-btn" onclick="changeMonth(-1)">←</button>
+                            <div class="month-display" id="monthDisplay"></div>
+                            <button class="nav-btn" onclick="changeMonth(1)">→</button>
+                        </div>
+                    </div>
+
+                    <div class="calendar-grid" id="calendar"></div>
+
+                    <div class="legend">
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: #667eea;"></div>
+                            <span>Deine Auswahl</span>
+                        </div>
+                        <div class="legend-item">
+                            <span><strong>VM</strong> = Vormittag | <strong>NM</strong> = Nachmittag | <strong>AB</strong> = Abend</span>
+                        </div>
+                    </div>
+                </div>
+
+                <button class="submit-btn" onclick="saveAvailability()" id="saveBtn">Verfügbarkeit speichern</button>
+                <div id="messageContainer"></div>
+            </div>
+        </div>
+
+        <div id="matches-tab" class="tab-content">
+            <div class="card">
+                <h3 class="section-title">🎯 Gemeinsame freie Zeiten</h3>
+                <div class="info-box">
+                    <div class="info-box-title">Perfekte Matches</div>
+                    <div class="info-box-text">Hier siehst du alle Zeitfenster, in denen ALLE Teilnehmer Zeit haben</div>
+                </div>
+                <div id="matchesList"></div>
+            </div>
+
+            <div class="card">
+                <h3 class="section-title">⚠️ Teilweise verfügbar</h3>
+                <div class="info-box">
+                    <div class="info-box-title">Alternative Optionen</div>
+                    <div class="info-box-text">Diese Zeitfenster funktionieren für einige, aber nicht alle</div>
+                </div>
+                <div id="partialMatchesList"></div>
+            </div>
+        </div>
+
+        <div id="participants-tab" class="tab-content">
+            <div class="card">
+                <h3 class="section-title">👥 Alle Teilnehmer & ihre Verfügbarkeit</h3>
+                <div id="participantsList"></div>
+            </div>
+        </div>
+        </div> <!-- Ende mainApp -->
+    </div>
+
+    <script src="js/terminfinder.js"></script>
+</body>
+</html>

@@ -1,0 +1,68 @@
+services:
+  # PHP Web Server with Apache
+  web:
+    image: php:8.2-apache
+    container_name: terminfinder_web
+    ports:
+      - "8070:80"
+    volumes:
+      - ./backend:/var/www/html/api
+      - ./frontend:/var/www/html
+      - ./docker/apache/000-default.conf:/etc/apache2/sites-available/000-default.conf
+    depends_on:
+      - database
+    networks:
+      - terminfinder_network
+    environment:
+      - DB_HOST=database
+      - DB_NAME=terminfinder
+      - DB_USER=terminfinder_user
+      - DB_PASSWORD=terminfinder_pass
+    command: >
+      bash -c "
+      apt-get update &&
+      docker-php-ext-install mysqli pdo pdo_mysql &&
+      a2enmod rewrite &&
+      apache2-foreground
+      "
+
+  # MySQL Database
+  database:
+    image: mysql:8.0
+    container_name: terminfinder_db
+    restart: always
+    ports:
+      - "8806:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: terminfinder
+      MYSQL_USER: terminfinder_user
+      MYSQL_PASSWORD: terminfinder_pass
+    volumes:
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - mysql_data:/var/lib/mysql
+    networks:
+      - terminfinder_network
+
+  # phpMyAdmin for database management
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: terminfinder_phpmyadmin
+    restart: always
+    ports:
+      - "8088:80"
+    environment:
+      PMA_HOST: database
+      PMA_USER: terminfinder_user
+      PMA_PASSWORD: terminfinder_pass
+    depends_on:
+      - database
+    networks:
+      - terminfinder_network
+
+volumes:
+  mysql_data:
+
+networks:
+  terminfinder_network:
+    driver: bridge
