@@ -1,1 +1,0 @@
-{"version":2,"defects":[],"times":{"GroupApiTest::testCreateAndAuthenticateGroup":1.021,"GroupApiTest::testGetGroupData":0.378,"GroupApiTest::testShareLinkTokenFlow":0.878}}
