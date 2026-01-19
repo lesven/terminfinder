@@ -11,6 +11,10 @@ let currentUser = '';
 let currentCode = '';
 let isAuthenticated = false;
 
+// Auto-save timer
+let autoSaveTimer = null;
+const AUTO_SAVE_DELAY = 1000; // ms
+
 // Constants
 const API_BASE = '/api';
 const monthNames = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
@@ -124,6 +128,66 @@ async function loadGroupData(code) {
     });
 }
 
+// Get a specific user's availability from the server
+async function getUserAvailability(groupCode, userName) {
+    return await apiCall('availability.php', {
+        action: 'getUserAvailability',
+        groupCode: groupCode,
+        userName: userName
+    });
+}
+
+// Debounced auto-save of current selectedSlots for the logged-in user
+function scheduleAutoSave() {
+    if (!isAuthenticated || !currentCode || !currentUser) return;
+    if (autoSaveTimer) clearTimeout(autoSaveTimer);
+    autoSaveTimer = setTimeout(async () => {
+        try {
+            const result = await saveUserAvailability(currentCode, currentUser, selectedSlots);
+            if (result && result.success) {
+                showMessage('Automatisch gespeichert', 'success');
+                await refreshGroupData();
+            } else {
+                showMessage(result.message || 'Automatisches Speichern fehlgeschlagen', 'error');
+            }
+        } catch (e) {
+            showMessage('Automatisches Speichern fehlgeschlagen: ' + e.message, 'error');
+        }
+    }, AUTO_SAVE_DELAY);
+}
+
+// When user leaves the name field, load their saved availability into the calendar
+async function onNameBlur() {
+    const name = document.getElementById('name').value.trim();
+    if (!name) {
+        currentUser = '';
+        selectedSlots = {};
+        renderCalendar();
+        return;
+    }
+    if (!isAuthenticated || !currentCode) {
+        // Not logged in yet — nothing to load
+        return;
+    }
+
+    currentUser = name;
+
+    try {
+        const res = await getUserAvailability(currentCode, currentUser);
+        if (res.success) {
+            selectedSlots = res.data || {};
+            renderCalendar();
+            showMessage('Deine gespeicherten Termine wurden geladen', 'success');
+        } else {
+            selectedSlots = {};
+            renderCalendar();
+            if (res.message) showMessage(res.message, 'error');
+        }
+    } catch (e) {
+        showMessage('Fehler beim Laden deiner Termine: ' + e.message, 'error');
+    }
+} 
+
 /**
  * Authentication Functions
  */
@@ -147,6 +211,14 @@ async function handleLogin() {
         if (result.success) {
             isAuthenticated = true;
             currentCode = code;
+
+            // Persist credentials for auto-login
+            try {
+                localStorage.setItem('tf_groupCode', code);
+                localStorage.setItem('tf_groupPassword', password);
+            } catch (e) {
+                console.warn('Could not persist credentials:', e);
+            }
             
             // Hide login screen and show main app
             document.getElementById('loginStatus').style.display = 'none';
@@ -159,6 +231,7 @@ async function handleLogin() {
             await refreshGroupData();
             renderCalendar();
             
+            updateLogoutButtonVisibility(true);
             showMessage('Erfolgreich angemeldet!', 'success');
         } else {
             showLoginMessage(result.message || 'Anmeldung fehlgeschlagen', 'error');
@@ -180,9 +253,63 @@ function showLoginMessage(message, type = 'success') {
 }
 
 async function checkAuthentication() {
-    // This function is no longer used for automatic authentication
-    // Keeping it for backward compatibility but it does nothing
-    return;
+    // Try auto-login with stored credentials
+    const storedCode = localStorage.getItem('tf_groupCode');
+    const storedPassword = localStorage.getItem('tf_groupPassword');
+    if (storedCode && storedPassword) {
+        try {
+            const result = await authenticateGroup(storedCode, storedPassword);
+            if (result.success) {
+                isAuthenticated = true;
+                currentCode = storedCode;
+                // Hide login and show app
+                document.getElementById('loginStatus').style.display = 'none';
+                document.getElementById('mainApp').style.display = 'block';
+                document.getElementById('currentGroupDisplay').textContent = currentCode;
+                await refreshGroupData();
+                renderCalendar();
+                updateLogoutButtonVisibility(true);
+                showMessage('Automatisch angemeldet!', 'success');
+                return;
+            }
+        } catch (e) {
+            console.error('Auto-login failed:', e);
+        }
+        // If auto-login failed, clear stored credentials
+        localStorage.removeItem('tf_groupCode');
+        localStorage.removeItem('tf_groupPassword');
+    }
+    updateLogoutButtonVisibility(false);
+}
+
+function updateLogoutButtonVisibility(show) {
+    const btn = document.getElementById('logoutBtn');
+    const globalBtn = document.getElementById('globalLogoutBtn');
+    if (btn) btn.style.display = show ? 'inline-block' : 'none';
+    if (globalBtn) globalBtn.style.display = show ? 'inline-block' : 'none';
+}
+
+function handleLogout() {
+    // Clear stored credentials and reset app state
+    localStorage.removeItem('tf_groupCode');
+    localStorage.removeItem('tf_groupPassword');
+
+    isAuthenticated = false;
+    currentCode = '';
+    currentUser = '';
+    groupData = {};
+
+    // clear pending autosave
+    if (autoSaveTimer) { clearTimeout(autoSaveTimer); autoSaveTimer = null; }
+
+    document.getElementById('loginStatus').style.display = 'block';
+    document.getElementById('mainApp').style.display = 'none';
+    document.getElementById('loginCode').value = '';
+    document.getElementById('loginPassword').value = '';
+    document.getElementById('currentGroupDisplay').textContent = '';
+
+    updateLogoutButtonVisibility(false);
+    showMessage('Erfolgreich ausgeloggt', 'success');
 }
 
 async function refreshGroupData() {
@@ -242,25 +369,7 @@ function switchTab(tabName) {
 /**
  * Debug Functions
  */
-async function testLogin() {
-    console.log('Testing login...');
-    try {
-        const result = await authenticateGroup('FAMILIE', 'familie123');
-        console.log('Login result:', result);
-        
-        if (result.success) {
-            isAuthenticated = true;
-            currentCode = 'FAMILIE';
-            await refreshGroupData();
-            showMessage('Test-Login erfolgreich!', 'success');
-        } else {
-            showMessage('Test-Login fehlgeschlagen: ' + result.message, 'error');
-        }
-    } catch (error) {
-        console.error('Login error:', error);
-        showMessage('Test-Login Fehler: ' + error.message, 'error');
-    }
-}
+
 
 function testData() {
     console.log('Current state:', {
@@ -354,6 +463,9 @@ function toggleTimeSlot(dateStr, slot, element) {
         selectedSlots[dateStr].push(slot);
         element.classList.add('selected');
     }
+
+    // Schedule an auto-save after changes
+    scheduleAutoSave();
 }
 
 function toggleWholeDay(dateStr) {
@@ -366,6 +478,8 @@ function toggleWholeDay(dateStr) {
     }
     
     renderCalendar();
+    // After toggling a whole day, schedule an auto-save
+    scheduleAutoSave();
 }
 
 function changeMonth(delta) {
@@ -440,6 +554,8 @@ function renderMatches() {
 
     const participants = groupData[currentCode];
     const participantNames = Object.keys(participants);
+    // Sort participant names alphabetically (German locale) for display
+    const participantNamesSorted = participantNames.slice().sort((a, b) => a.localeCompare(b, 'de', { sensitivity: 'base' }));
     const allDateSlots = {};
     
     // Collect all date/slot combinations
@@ -460,10 +576,13 @@ function renderMatches() {
     const partialMatches = [];
 
     Object.values(allDateSlots).forEach(item => {
+        // Sort participants for consistent display and grouping
+        item.participants.sort((a, b) => a.localeCompare(b, 'de', { sensitivity: 'base' }));
+
         if (item.participants.length === participantNames.length) {
             perfectMatches.push(item);
         } else if (item.participants.length > 1) {
-            item.missing = participantNames.filter(n => !item.participants.includes(n));
+            item.missing = participantNamesSorted.filter(n => !item.participants.includes(n));
             partialMatches.push(item);
         }
     });
@@ -503,7 +622,10 @@ function renderMatches() {
                     <div class="match-time-slots">
                         ${slots.map(s => `<span class="match-time-badge">${getTimeSlotDisplay(s)}</span>`).join('')}
                     </div>
-                    <div style="margin-top: 10px; opacity: 0.9;">✓ Alle ${participantNames.length} Teilnehmer verfügbar</div>
+                    <div style="margin-top: 10px; opacity: 0.9;">
+                        <div>✓ Alle ${participantNamesSorted.length} Teilnehmer verfügbar</div>
+                        <div style="margin-top:6px; font-size:0.95em;">${participantNamesSorted.join(', ')}</div>
+                    </div>
                 </div>
             `;
         });
@@ -575,9 +697,14 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('loginPassword').addEventListener('keypress', function(e) {
         if (e.key === 'Enter') handleLogin();
     });
+
+    // Load user's saved selection when leaving the name field
+    const nameInput = document.getElementById('name');
+    if (nameInput) nameInput.addEventListener('blur', onNameBlur);
     
-    // Only render calendar initially - other content will be loaded after login
-    // renderCalendar(); // Don't render calendar until authenticated
+    // Attempt automatic authentication if credentials are stored
+    checkAuthentication();
+
     console.log('App initialized - waiting for login');
 });
 

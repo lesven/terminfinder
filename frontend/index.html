@@ -489,14 +489,14 @@
 </head>
 <body>
     <div class="container">
-        <header>
+        <header style="position:relative;">
             <h1>📅 Terminfinder</h1>
             <p class="subtitle">Finde den perfekten Tag und die perfekte Uhrzeit für euer Team</p>
+            <button id="globalLogoutBtn" onclick="handleLogout()" style="display:none; position:absolute; right:20px; top:18px;" class="submit-btn">Ausloggen</button>
         </header>
 
         <!-- Debug Button für Entwicklung -->
         <div style="margin: 20px 0; padding: 10px; background: #f0f0f0; border-radius: 5px;">
-            <button onclick="testLogin()">Test Login (FAMILIE/familie123)</button>
             <button onclick="testData()">Zeige aktuelle Daten</button>
         </div>
 
@@ -542,6 +542,7 @@
                     <div class="info-box">
                         <div class="info-box-title">✅ Angemeldet</div>
                         <div class="info-box-text">Du bist erfolgreich angemeldet als Gruppe: <strong id="currentGroupDisplay"></strong></div>
+                        <button id="logoutBtn" onclick="handleLogout()" style="display:none; margin-top:8px;" class="submit-btn">Ausloggen</button>
                     </div>
                 </div>
 
