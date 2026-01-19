@@ -55,7 +55,10 @@
                     <div class="info-box">
                         <div class="info-box-title">✅ Angemeldet</div>
                         <div class="info-box-text">Du bist erfolgreich angemeldet als Gruppe: <strong id="currentGroupDisplay"></strong></div>
-                        <button id="logoutBtn" onclick="handleLogout()" style="display:none; margin-top:8px;" class="submit-btn">Ausloggen</button>
+                        <div style="margin-top:8px; display:flex; gap:8px;">
+                            <button id="createShareBtn" onclick="createShareLink()" style="display:none;" class="submit-btn">Link erstellen</button>
+                            <button id="logoutBtn" onclick="handleLogout()" style="display:none;" class="submit-btn">Ausloggen</button>
+                        </div>
                     </div>
                 </div>
 

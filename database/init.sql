@@ -51,3 +51,17 @@ INSERT IGNORE INTO `availabilities` (group_code, user_name, date, time_slot) VAL
 ('demo2024', 'Anna Schmidt', '2026-01-21', 'evening'),
 ('demo2024', 'Tom Weber', '2026-01-20', 'morning'),
 ('demo2024', 'Tom Weber', '2026-01-22', 'afternoon');
+
+-- Share links table: stores hashed tokens for deeplinks that allow auto-authentication
+CREATE TABLE IF NOT EXISTS `share_links` (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    group_code VARCHAR(255) NOT NULL,
+    token_hash CHAR(64) NOT NULL,
+    expires_at DATETIME DEFAULT NULL,
+    single_use TINYINT(1) DEFAULT 0,
+    used_at DATETIME DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_share_group_code (group_code),
+    UNIQUE KEY unique_token_hash (token_hash),
+    FOREIGN KEY (group_code) REFERENCES `groups`(code) ON DELETE CASCADE
+);

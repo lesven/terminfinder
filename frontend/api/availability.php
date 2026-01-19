@@ -161,15 +161,17 @@ if ($method === 'POST') {
     
     switch ($action) {
         case 'save':
-            $error = validateRequired($input, ['groupCode', 'userName', 'availabilities']);
+            // availabilities can be empty (means delete all for user), so only require groupCode and userName
+            $error = validateRequired($input, ['groupCode', 'userName']);
             if ($error) {
                 sendErrorResponse($error);
             }
             
+            $avail = $input['availabilities'] ?? [];
             $result = $api->saveAvailability(
                 $input['groupCode'], 
                 $input['userName'], 
-                $input['availabilities']
+                $avail
             );
             sendJsonResponse($result);
             break;

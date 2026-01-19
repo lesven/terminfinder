@@ -112,12 +112,30 @@ async function authenticateGroup(code, password) {
     });
 }
 
+function normalizeAvailabilitiesForApi(availabilities) {
+    // If already an array (array-of-objects), return as-is
+    if (Array.isArray(availabilities)) return availabilities;
+
+    // If it's an object mapping date => [slots], convert to array of objects
+    const result = [];
+    for (const [date, slots] of Object.entries(availabilities || {})) {
+        if (!Array.isArray(slots)) continue;
+        slots.forEach(slot => {
+            result.push({ date: date, timeSlot: slot, available: true });
+        });
+    }
+    return result;
+}
+
 async function saveUserAvailability(groupCode, userName, availabilities) {
+    const payloadAvail = normalizeAvailabilitiesForApi(availabilities);
+    console.debug('Saving availability payload:', { groupCode, userName, availabilities: payloadAvail });
+
     return await apiCall('availability.php', {
         action: 'save',
         groupCode: groupCode,
         userName: userName,
-        availabilities: availabilities
+        availabilities: payloadAvail
     });
 }
 
@@ -253,7 +271,25 @@ function showLoginMessage(message, type = 'success') {
 }
 
 async function checkAuthentication() {
-    // Try auto-login with stored credentials
+    // 1) Try token from URL fragment (safer than query because it's not sent to server on navigation)
+    const hash = window.location.hash || '';
+    const match = hash.match(/t=([a-f0-9]+)/i);
+    if (match) {
+        const token = match[1];
+        const ok = await authenticateWithTokenFrontend(token);
+        if (ok) return;
+    }
+
+    // 2) Try persisted share token
+    const storedShareToken = localStorage.getItem('tf_share_token');
+    if (storedShareToken) {
+        const ok = await authenticateWithTokenFrontend(storedShareToken);
+        if (ok) return;
+        // invalid stored token -> remove
+        localStorage.removeItem('tf_share_token');
+    }
+
+    // 3) Fallback to stored credentials (code + password)
     const storedCode = localStorage.getItem('tf_groupCode');
     const storedPassword = localStorage.getItem('tf_groupPassword');
     if (storedCode && storedPassword) {
@@ -279,20 +315,103 @@ async function checkAuthentication() {
         localStorage.removeItem('tf_groupCode');
         localStorage.removeItem('tf_groupPassword');
     }
+
     updateLogoutButtonVisibility(false);
+}
+
+// Authenticate using a share token (frontend)
+async function authenticateWithTokenFrontend(token) {
+    try {
+        const res = await apiCall('groups.php', { action: 'authenticateWithToken', token });
+        if (res && res.success) {
+            isAuthenticated = true;
+            currentCode = res.groupCode;
+            // Persist token for continued access
+            try { localStorage.setItem('tf_share_token', token); } catch (e) { console.warn('Could not persist share token:', e); }
+
+            // Hide login and show app
+            document.getElementById('loginStatus').style.display = 'none';
+            document.getElementById('mainApp').style.display = 'block';
+            document.getElementById('currentGroupDisplay').textContent = currentCode;
+
+            await refreshGroupData();
+            renderCalendar();
+            updateLogoutButtonVisibility(true);
+            showMessage('Mit Deeplink angemeldet!', 'success');
+
+            // Remove token from URL fragment to avoid accidental sharing
+            history.replaceState(null, '', window.location.pathname + window.location.search);
+            return true;
+        } else {
+            return false;
+        }
+    } catch (e) {
+        console.error('Token auth failed:', e);
+        return false;
+    }
+}
+
+// Create a share link for the current group
+async function createShareLink() {
+    if (!isAuthenticated || !currentCode) {
+        showMessage('Du musst zuerst angemeldet sein, um einen Link zu erstellen', 'error');
+        return;
+    }
+
+    // Ask for TTL in days (default 7)
+    let ttl = prompt('Gültigkeit des Links in Tagen (leer = 7):', '7');
+    if (ttl === null) return; // cancelled
+    ttl = ttl.trim() === '' ? 7 : Math.max(1, parseInt(ttl, 10) || 7);
+
+    // Use stored password if available, otherwise ask for it
+    let password = localStorage.getItem('tf_groupPassword');
+    if (!password) {
+        password = prompt('Bitte gib das Gruppenpasswort zur Bestätigung ein:');
+        if (password === null) return;
+    }
+
+    try {
+        const res = await apiCall('groups.php', {
+            action: 'createShareLink',
+            code: currentCode,
+            password,
+            ttlDays: ttl
+        });
+
+        if (res && res.success) {
+            const token = res.token;
+            const link = window.location.origin + window.location.pathname + '#t=' + token;
+
+            // show link and copy to clipboard
+            try {
+                await navigator.clipboard.writeText(link);
+                showMessage('Link erstellt und in die Zwischenablage kopiert!', 'success');
+            } catch (e) {
+                // Fallback: show prompt with link
+                prompt('Dein Share-Link (kopiere ihn):', link);
+            }
+        } else {
+            showMessage(res.message || 'Konnte Link nicht erstellen', 'error');
+        }
+    } catch (e) {
+        showMessage('Fehler beim Erstellen des Links: ' + e.message, 'error');
+    }
 }
 
 function updateLogoutButtonVisibility(show) {
     const btn = document.getElementById('logoutBtn');
     const globalBtn = document.getElementById('globalLogoutBtn');
+    const createBtn = document.getElementById('createShareBtn');
     if (btn) btn.style.display = show ? 'inline-block' : 'none';
     if (globalBtn) globalBtn.style.display = show ? 'inline-block' : 'none';
+    if (createBtn) createBtn.style.display = show ? 'inline-block' : 'none';
 }
 
 function handleLogout() {
     // Clear stored credentials and reset app state
     localStorage.removeItem('tf_groupCode');
     localStorage.removeItem('tf_groupPassword');
+    localStorage.removeItem('tf_share_token');
 
     isAuthenticated = false;
     currentCode = '';
@@ -715,3 +834,5 @@ window.switchTab = switchTab;
 window.changeMonth = changeMonth;
 window.saveAvailability = saveAvailability;
 window.handleLogin = handleLogin;
+window.createShareLink = createShareLink;
+window.authenticateWithTokenFrontend = authenticateWithTokenFrontend;

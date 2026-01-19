@@ -119,6 +119,62 @@ class GroupAPI {
         } catch (Exception $e) {
             return ['success' => false, 'message' => 'Failed to get group data: ' . $e->getMessage()];
         }
+
+    /**
+     * Create a share link token (requires group password) — returns token (plaintext) and expires_at
+     */
+    public function createShareLink($groupCode, $password, $ttlDays = 7, $singleUse = 0) {
+        try {
+            // Verify password
+            $stmt = $this->db->prepare("SELECT password_hash FROM `group_passwords` WHERE group_code = ?");
+            $stmt->execute([$groupCode]);
+            $passwordData = $stmt->fetch();
+            if (!$passwordData || !verifyPassword($password, $passwordData['password_hash'])) {
+                return ['success' => false, 'message' => 'Invalid password'];
+            }
+
+            // Generate token and store its hash
+            $token = bin2hex(random_bytes(16));
+            $tokenHash = hash('sha256', $token);
+            $expiresAt = $ttlDays ? date('Y-m-d H:i:s', strtotime("+{$ttlDays} days")) : null;
+
+            $stmt = $this->db->prepare("INSERT INTO `share_links` (group_code, token_hash, expires_at, single_use) VALUES (?, ?, ?, ?)");
+            $stmt->execute([$groupCode, $tokenHash, $expiresAt, (int)$singleUse]);
+
+            return ['success' => true, 'token' => $token, 'expires_at' => $expiresAt];
+        } catch (Exception $e) {
+            return ['success' => false, 'message' => 'Failed to create share link: ' . $e->getMessage()];
+        }
+    }
+
+    /**
+     * Authenticate using a share token (plaintext token provided by client)
+     */
+    public function authenticateWithToken($token) {
+        try {
+            $tokenHash = hash('sha256', $token);
+            $stmt = $this->db->prepare("SELECT id, group_code, single_use, used_at FROM `share_links` WHERE token_hash = ? AND (expires_at IS NULL OR expires_at > NOW())");
+            $stmt->execute([$tokenHash]);
+            $row = $stmt->fetch();
+
+            if (!$row) {
+                return ['success' => false, 'message' => 'Invalid or expired token'];
+            }
+
+            if ($row['single_use'] && $row['used_at']) {
+                return ['success' => false, 'message' => 'Token already used'];
+            }
+
+            // Mark single-use tokens as used
+            if ($row['single_use']) {
+                $update = $this->db->prepare("UPDATE `share_links` SET used_at = NOW() WHERE id = ?");
+                $update->execute([$row['id']]);
+            }
+
+            return ['success' => true, 'groupCode' => $row['group_code']];
+        } catch (Exception $e) {
+            return ['success' => false, 'message' => 'Failed to authenticate token: ' . $e->getMessage()];
+        }
     }
 }
 
@@ -148,6 +204,26 @@ if ($method === 'POST') {
             }
             
             $result = $api->getGroupData($input['code']);
+            sendJsonResponse($result);
+            break;
+
+        case 'createShareLink':
+            $error = validateRequired($input, ['code', 'password']);
+            if ($error) {
+                sendErrorResponse($error);
+            }
+            $ttl = isset($input['ttlDays']) ? (int)$input['ttlDays'] : 7;
+            $singleUse = isset($input['singleUse']) ? (int)$input['singleUse'] : 0;
+            $result = $api->createShareLink($input['code'], $input['password'], $ttl, $singleUse);
+            sendJsonResponse($result);
+            break;
+
+        case 'authenticateWithToken':
+            $error = validateRequired($input, ['token']);
+            if ($error) {
+                sendErrorResponse($error);
+            }
+            $result = $api->authenticateWithToken($input['token']);
             sendJsonResponse($result);
             break;
             
