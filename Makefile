@@ -1,7 +1,7 @@
 # Terminfinder Makefile
 # Praktische Befehle für Docker-Verwaltung
 
-.PHONY: help start stop restart logs clean status shell db install test
+.PHONY: help start stop restart logs clean status shell db install test test-coverage test-ci
 
 # Standard Target
 help: ## Zeigt diese Hilfe an
@@ -72,7 +72,9 @@ install: ## Komplette Neuinstallation (löscht alle Daten!)
 	docker-compose down -v
 	@echo "🏗️  Baue Container neu..."
 	docker-compose build --no-cache
-	@echo "🚀 Starte Container..."
+	@echo "� Baue optionales PHP-CLI Image mit Xdebug (für Coverage)"
+	@docker image inspect terminfinder/php-cli-xdebug >/dev/null 2>&1 || docker build -t terminfinder/php-cli-xdebug -f docker/php/Dockerfile docker
+	@echo "�🚀 Starte Container..."
 	docker-compose up -d
 	@echo "✅ Installation abgeschlossen!"
 
@@ -106,6 +108,22 @@ update: ## Updated Container Images
 # Tests
 test: ## Führt PHPUnit-Tests im Composer-Container aus
 	@echo "🧪 PHPUnit Tests werden ausgeführt..."
+	@docker run --rm -v $(PWD):/app -w /app composer php ./vendor/bin/phpunit --configuration phpunit.xml
+
+# Coverage
+test-coverage: ## Führt PHPUnit und erzeugt Coverage-Bericht (HTML im Ordner coverage)
+	@echo "🧪 Running tests (without coverage) to ensure they pass..."
+	@docker run --rm -v $(PWD):/app -w /app composer php ./vendor/bin/phpunit --configuration phpunit.xml
+	@echo "🧪 Generating coverage report using phpdbg (no Xdebug required); failure here won't fail the Make target"
+	-@docker run --rm -v $(PWD):/app -w /app php:8.2-cli phpdbg -qrr ./vendor/bin/phpunit --configuration phpunit.xml --coverage-html coverage --coverage-text --coverage-filter ./backend || true
+	@echo "🧪 If coverage driver is still missing, build and run tests with a PHP image that has Xdebug enabled"
+	-@docker image inspect terminfinder/php-cli-xdebug >/dev/null 2>&1 || docker build -t terminfinder/php-cli-xdebug -f docker/php/Dockerfile docker
+	-@docker run --rm -e XDEBUG_MODE=coverage -v $(PWD):/app -w /app terminfinder/php-cli-xdebug php ./vendor/bin/phpunit --configuration phpunit.xml --coverage-html coverage --coverage-text --coverage-filter ./backend || true
+
+# CI helper
+test-ci: ## Installiert Abhängigkeiten und führt Tests (CI-freundlich)
+	@echo "🧪 CI: installiere deps und führe Tests aus..."
+	@docker run --rm -v $(PWD):/app -w /app composer install --no-interaction --no-progress
 	@docker run --rm -v $(PWD):/app -w /app composer php ./vendor/bin/phpunit --configuration phpunit.xml
 # Quick Actions
 open: ## Öffnet Terminfinder im Browser
