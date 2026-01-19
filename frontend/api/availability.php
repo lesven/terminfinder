@@ -36,29 +36,55 @@ class AvailabilityAPI {
             $stmt->execute([$groupCode, $userName]);
             
             // Insert new availabilities
-            $stmt = $this->db->prepare("
+            $insertStmt = $this->db->prepare("
                 INSERT INTO `availabilities` (group_code, user_name, date, time_slot) 
                 VALUES (?, ?, ?, ?)
             ");
             
-            // Handle array format from frontend: [{date: "2026-01-20", timeSlot: "10:00", available: true}]
-            foreach ($availabilities as $availability) {
-                if (!isset($availability['available']) || !$availability['available']) {
-                    continue; // Skip unavailable time slots
+            // Support two frontend formats:
+            // 1) Associative: { "2026-01-20": ["morning","afternoon"], ... }
+            // 2) List of objects: [ { date: "2026-01-20", timeSlot: "10:00", available: true }, ... ]
+            if (!is_array($availabilities) || empty($availabilities)) {
+                // nothing to insert
+            } else {
+                $firstKey = array_key_first($availabilities);
+                $firstVal = $availabilities[$firstKey];
+                
+                if (is_array($firstVal) && !(isset($firstVal['date']) || isset($firstVal['timeSlot']) || isset($firstVal['available']))) {
+                    // Format 1: date => [slots]
+                    foreach ($availabilities as $date => $slots) {
+                        if (!validateDate($date)) {
+                            throw new Exception("Invalid date format: {$date}");
+                        }
+                        if (!is_array($slots)) continue;
+                        foreach ($slots as $slot) {
+                            if (!validateTimeSlot($slot)) {
+                                throw new Exception("Invalid time slot: {$slot}");
+                            }
+                            $insertStmt->execute([$groupCode, $userName, $date, $slot]);
+                        }
+                    }
+                } else {
+                    // Format 2: array of objects with available flag
+                    foreach ($availabilities as $availability) {
+                        if (!isset($availability['available']) || !$availability['available']) {
+                            continue; // Skip unavailable time slots
+                        }
+                        
+                        $date = $availability['date'];
+                        $timeSlot = $availability['timeSlot'];
+                        
+                        if (!validateDate($date)) {
+                            throw new Exception("Invalid date format: {$date}");
+                        }
+                        
+                        if (!validateTimeSlot($timeSlot)) {
+                            throw new Exception("Invalid time slot: {$timeSlot}");
+                        }
+                        
+                        $insertStmt->execute([$groupCode, $userName, $date, $timeSlot]);
+                    }
                 }
-                
-                $date = $availability['date'];
-                $timeSlot = $availability['timeSlot'];
-                
-                if (!validateDate($date)) {
-                    throw new Exception("Invalid date format: {$date}");
-                }
-                
-                if (!validateTimeSlot($timeSlot)) {
-                    throw new Exception("Invalid time slot: {$timeSlot}");
-                }
-                
-                $stmt->execute([$groupCode, $userName, $date, $timeSlot]);
             }
             
             $this->db->commit();
