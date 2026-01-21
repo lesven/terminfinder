@@ -135,7 +135,7 @@ open: ## Öffnet Terminfinder im Browser
 phpmyadmin: ## Öffnet phpMyAdmin im Browser
 	@echo "🗄️  Öffne http://localhost:8088"
 	@command -v xdg-open >/dev/null && xdg-open http://localhost:8081 || \
-	command -v open >/dev/null && open http://localhost:8081 || \
+	command -v open >/dev/null && open http://localhost:8088 || \
 	echo "Bitte öffne http://localhost:8088 manuell in deinem Browser"
 
 # Development helpers
