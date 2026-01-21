@@ -33,8 +33,16 @@ class AvailabilityAPI {
      */
     public function saveAvailability($groupCode, $userName, $availabilities) {
         try {
-            // NOTE: group existence check removed to support in-memory test DBs without a `groups` table
-            // If the DB schema enforces foreign keys, insert will fail appropriately.
+            // Only check for group existence if the `groups` table exists (some test DBs may not have it).
+            // This keeps behavior strict in production while remaining compatible with in-memory test DBs.
+            if (function_exists('tableExists') && tableExists($this->db, 'groups')) {
+                $groupCheckStmt = $this->db->prepare("SELECT COUNT(*) FROM `groups` WHERE code = ?");
+                $groupCheckStmt->execute([$groupCode]);
+                $groupExists = $groupCheckStmt->fetchColumn();
+                if (!$groupExists) {
+                    return ['success' => false, 'message' => 'Group not found. Please make sure the group code exists.'];
+                }
+            }
             
             $this->db->beginTransaction();
             

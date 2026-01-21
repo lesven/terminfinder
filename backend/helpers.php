@@ -88,4 +88,30 @@ function validateDate($date) {
 
     return \Terminfinder\Domain\ValueObject\LocalDate::isValid($date);
 }
+
+/**
+ * Check whether a table exists in the connected database.
+ * Works for SQLite and MySQL; falls back to a safe try/catch check for other drivers.
+ */
+function tableExists(PDO $db, string $tableName) {
+    try {
+        $driver = $db->getAttribute(PDO::ATTR_DRIVER_NAME);
+        if ($driver === 'sqlite') {
+            $stmt = $db->prepare("SELECT name FROM sqlite_master WHERE type='table' AND name = ?");
+            $stmt->execute([$tableName]);
+            return (bool)$stmt->fetchColumn();
+        } elseif ($driver === 'mysql' || $driver === 'pdo_mysql') {
+            $stmt = $db->prepare("SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?");
+            $stmt->execute([$tableName]);
+            return (bool)$stmt->fetchColumn();
+        } else {
+            // Fallback: attempt a lightweight query; treat any exception as non-existence
+            $stmt = $db->prepare("SELECT 1 FROM {$tableName} LIMIT 1");
+            $stmt->execute();
+            return true;
+        }
+    } catch (Exception $e) {
+        return false;
+    }
+}
 ?>

@@ -136,6 +136,24 @@ class AvailabilityApiTest extends TestCase {
         $this->assertStringContainsString('Invalid time slot', $result['message']);
     }
     
+    public function testSaveAvailabilityFailsWhenGroupMissingAndTableExists() {
+        // Create groups table but do not insert any group rows
+        $this->mockDatabase->exec('CREATE TABLE groups (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT NOT NULL UNIQUE)');
+
+        $availabilities = ['2024-03-01' => ['morning']];
+        $result = $this->availabilityApi->saveAvailability('MISSING', 'User', $availabilities);
+
+        $this->assertFalse($result['success']);
+        $this->assertStringContainsString('Group not found', $result['message']);
+    }
+
+    public function testSaveAvailabilitySucceedsWhenGroupsTableMissing() {
+        // Ensure groups table does not exist (default in setUp)
+        $availabilities = ['2024-03-01' => ['morning']];
+        $result = $this->availabilityApi->saveAvailability('ANY', 'User', $availabilities);
+        $this->assertTrue($result['success']);
+    }
+
     public function testGetUserAvailability() {
         // Insert test data
         $stmt = $this->mockDatabase->prepare('INSERT INTO availabilities (group_code, user_name, date, time_slot) VALUES (?, ?, ?, ?)');
