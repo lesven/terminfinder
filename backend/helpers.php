@@ -81,7 +81,11 @@ function validateTimeSlot($timeSlot) {
 }
 
 function validateDate($date) {
-    $d = DateTime::createFromFormat('Y-m-d', $date);
-    return $d && $d->format('Y-m-d') === $date;
+    // Delegate validation to the LocalDate Value Object for consistency
+    if (!is_string($date)) {
+        return false;
+    }
+
+    return \Terminfinder\Domain\ValueObject\LocalDate::isValid($date);
 }
 ?>
