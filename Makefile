@@ -16,7 +16,7 @@ start: ## Startet alle Container (hoch)
 	docker-compose up -d
 	@echo "✅ Container gestartet!"
 	@echo "   Terminfinder: http://localhost:8070"
-	@echo "   phpMyAdmin:   http://localhost:8081"
+	@echo "   phpMyAdmin:   http://localhost:8088"
 
 up: start ## Alias für start
 
@@ -133,10 +133,10 @@ open: ## Öffnet Terminfinder im Browser
 	echo "Bitte öffne http://localhost:8070 manuell in deinem Browser"
 
 phpmyadmin: ## Öffnet phpMyAdmin im Browser
-	@echo "🗄️  Öffne http://localhost:8081"
+	@echo "🗄️  Öffne http://localhost:8088"
 	@command -v xdg-open >/dev/null && xdg-open http://localhost:8081 || \
 	command -v open >/dev/null && open http://localhost:8081 || \
-	echo "Bitte öffne http://localhost:8081 manuell in deinem Browser"
+	echo "Bitte öffne http://localhost:8088 manuell in deinem Browser"
 
 # Development helpers
 dev: ## Startet im Development-Modus (mit Logs)
