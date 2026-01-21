@@ -29,10 +29,13 @@ class GroupAPI {
      */
     public function authenticateGroup($code, $password) {
         try {
-            // Check if group exists
-            $stmt = $this->db->prepare("SELECT code FROM `groups` WHERE code = ?");
-            $stmt->execute([$code]);
-            $group = $stmt->fetch();
+            // Check if group exists only if the `groups` table is present
+            $group = null;
+            if (function_exists('tableExists') && tableExists($this->db, 'groups')) {
+                $stmt = $this->db->prepare("SELECT code FROM `groups` WHERE code = ?");
+                $stmt->execute([$code]);
+                $group = $stmt->fetch();
+            }
             
             if (!$group) {
                 // Group doesn't exist, create it with the provided password
@@ -75,11 +78,15 @@ class GroupAPI {
             $stmt = $this->db->prepare("INSERT INTO `group_passwords` (group_code, password_hash) VALUES (?, ?)");
             $stmt->execute([$code, $passwordHash]);
             
-            $this->db->commit();
+            if ($this->db->inTransaction()) {
+                $this->db->commit();
+            }
             return ['success' => true, 'message' => 'Group created successfully'];
             
         } catch (Exception $e) {
-            $this->db->rollback();
+            if ($this->db->inTransaction()) {
+                $this->db->rollback();
+            }
             return ['success' => false, 'message' => 'Failed to create group: ' . $e->getMessage()];
         }
     }

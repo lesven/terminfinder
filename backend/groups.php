@@ -138,10 +138,14 @@ class GroupAPI {
             $passwordHash = hashPassword($password);
             $this->execute("INSERT INTO `group_passwords` (group_code, password_hash) VALUES (?, ?)", [$code, $passwordHash]);
 
-            $this->db->commit();
+            if ($this->db->inTransaction()) {
+                $this->db->commit();
+            }
             return $this->success(['message' => 'Group created successfully']);
         } catch (Exception $e) {
-            $this->db->rollback();
+            if ($this->db->inTransaction()) {
+                $this->db->rollback();
+            }
             return $this->error('Failed to create group: ' . $e->getMessage());
         }
     }

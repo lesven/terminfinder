@@ -87,11 +87,15 @@ class AvailabilityAPI {
                 }
             }
             
-            $this->db->commit();
+            if ($this->db->inTransaction()) {
+                $this->db->commit();
+            }
             return ['success' => true, 'message' => 'Availability saved successfully'];
             
         } catch (Exception $e) {
-            $this->db->rollback();
+            if ($this->db->inTransaction()) {
+                $this->db->rollback();
+            }
             return ['success' => false, 'message' => 'Failed to save availability: ' . $e->getMessage()];
         }
     }
